@@ -19,16 +19,18 @@ export const registerUser = asyncHandler(async (req, res) => {
     companySize,
     contactPerson
   } = req.body;
+
   // Validate email format
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
     res.status(400);
     throw new Error('Please enter a valid email address');
   }
+
   // Check if user exists
   const userExists = await User.findOne({ email });
   if (userExists) {
-    res.status(409); // Using 409 Conflict for already existing resource
+    res.status(409); // 409 Conflict
     throw new Error('This email address already exists. Please try logging in instead.');
   }
 
@@ -88,20 +90,19 @@ export const registerUser = asyncHandler(async (req, res) => {
 
 // @desc    Login user
 export const loginUser = asyncHandler(async (req, res) => {
-  try {
-    console.log('Login attempt:', {
-      email: req.body.email,
-      body: req.body,
-      headers: req.headers
-    });
-    
-    if (!req.body || Object.keys(req.body).length === 0) {
-      res.status(400);
-      throw new Error('Missing request body');
-    }
-    
-    const { email, password } = req.body;
-  
+  console.log('Login attempt:', {
+    email: req.body.email,
+    body: req.body,
+    headers: req.headers
+  });
+
+  if (!req.body || Object.keys(req.body).length === 0) {
+    res.status(400);
+    throw new Error('Missing request body');
+  }
+
+  const { email, password } = req.body;
+
   // Validate email format
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
