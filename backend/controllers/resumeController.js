@@ -39,9 +39,7 @@ export const uploadResume = asyncHandler(async (req, res) => {
       });
       res.status(400);
       throw new Error('File upload failed: Missing Cloudinary path. This usually indicates a problem with the Cloudinary upload.');
-    }
-
-    // Log file details for debugging
+    }    // Log file details for debugging
     console.log("📄 File Details:", {
       originalName: file.originalname,
       mimeType: file.mimetype,
@@ -101,4 +99,98 @@ export const uploadResume = asyncHandler(async (req, res) => {
       error: process.env.NODE_ENV === 'development' ? error : undefined
     });
   }
+});
+
+// @desc    Get all resumes for a user
+// @route   GET /api/resume/user/:userId
+// @access  Private
+export const getUserResumes = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  // Check if the requesting user is the owner of the resumes
+  if (req.user._id.toString() !== userId) {
+    res.status(403);
+    throw new Error('Not authorized to access these resumes');
+  }
+
+  const resumes = await Resume.find({ user: userId })
+    .sort({ createdAt: -1 })
+    .select('_id resumeUrl name email createdAt');
+
+  console.log(`Found ${resumes.length} resumes for user ${userId}`);
+
+  res.json({
+    success: true,
+    data: resumes.map(resume => ({
+      id: resume._id,
+      filename: resume.name,
+      url: resume.resumeUrl,
+      uploadedAt: resume.createdAt
+    }))
+  });
+});
+
+// @desc    Get a single resume by ID
+// @route   GET /api/resume/:id
+// @access  Private
+export const getResumeById = asyncHandler(async (req, res) => {
+  const resume = await Resume.findById(req.params.id);
+
+  if (!resume) {
+    res.status(404);
+    throw new Error('Resume not found');
+  }
+
+  // Check if the requesting user is the owner of the resume
+  if (resume.userId.toString() !== req.user.id) {
+    res.status(403);
+    throw new Error('Not authorized to access this resume');
+  }
+
+  res.json(resume);
+});
+
+// @desc    Delete a resume
+// @route   DELETE /api/resume/:id
+// @access  Private
+export const deleteResume = asyncHandler(async (req, res) => {
+  const resumeId = req.params.id;
+
+  console.log('🗑️ Attempting to delete resume:', resumeId);
+
+  const resume = await Resume.findById(resumeId);
+
+  if (!resume) {
+    console.log('❌ Resume not found:', resumeId);
+    res.status(404);
+    throw new Error('Resume not found');
+  }
+
+  // Check ownership
+  if (resume.user.toString() !== req.user._id.toString()) {
+    console.log('❌ Unauthorized deletion attempt:', {
+      resumeUser: resume.user,
+      requestUser: req.user._id
+    });
+    res.status(403);
+    throw new Error('Not authorized to delete this resume');
+  }
+
+  // TODO: Delete file from Cloudinary
+  // We can add Cloudinary deletion here if needed
+  // const cloudinaryUrl = resume.resumeUrl;
+  // const publicId = cloudinaryUrl.split('/').pop();
+  // await cloudinary.uploader.destroy(publicId);
+
+  await resume.deleteOne();
+
+  console.log('✅ Resume deleted successfully:', resumeId);
+
+  res.json({
+    success: true,
+    message: 'Resume deleted successfully',
+    data: {
+      id: resumeId
+    }
+  });
 });

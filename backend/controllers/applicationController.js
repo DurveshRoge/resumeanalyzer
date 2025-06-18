@@ -65,3 +65,57 @@ export const getMyApplications = asyncHandler(async (req, res) => {
   );
   res.json(applications);
 });
+
+// @desc    Get applications for a specific user
+// @route   GET /api/apply/user/:userId
+// @access  Private
+export const getUserApplications = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  // Check if the requesting user is the owner of the applications
+  if (req.user.id !== userId) {
+    res.status(403);
+    throw new Error('Not authorized to access these applications');
+  }
+
+  const applications = await Application.find({ applicant: userId })
+    .populate('internship')
+    .populate('resume')
+    .sort({ createdAt: -1 });
+
+  res.json(applications);
+});
+
+// @desc    Update application status
+// @route   PUT /api/apply/:applicationId
+// @access  Private (companies only)
+export const updateApplicationStatus = asyncHandler(async (req, res) => {
+  const { status } = req.body;
+  const { applicationId } = req.params;
+
+  const application = await Application.findById(applicationId)
+    .populate('internship');
+
+  if (!application) {
+    res.status(404);
+    throw new Error('Application not found');
+  }
+
+  // Check if the requesting user is the owner of the internship
+  const internship = await Internship.findById(application.internship);
+  if (!internship || internship.company.toString() !== req.user.id) {
+    res.status(403);
+    throw new Error('Not authorized to update this application');
+  }
+
+  // Validate status
+  if (!['pending', 'accepted', 'rejected'].includes(status)) {
+    res.status(400);
+    throw new Error('Invalid status. Must be pending, accepted, or rejected');
+  }
+
+  application.status = status;
+  await application.save();
+
+  res.json(application);
+});

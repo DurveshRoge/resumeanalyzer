@@ -2,7 +2,12 @@ import express from 'express';
 import multer from 'multer';
 import { storage } from '../utils/cloudinary.js';
 import { protect } from '../middleware/authMiddleware.js';
-import { uploadResume } from '../controllers/resumeController.js';
+import { 
+  uploadResume, 
+  getUserResumes, 
+  getResumeById,
+  deleteResume
+} from '../controllers/resumeController.js';
 
 const router = express.Router();
 
@@ -89,5 +94,14 @@ router.post('/upload',
   handleMulterError,
   uploadResume
 );
+
+// Get resumes by user ID
+router.get('/user/:userId', protect, getUserResumes);
+
+// Get single resume by ID
+router.get('/:id', protect, getResumeById);
+
+// Delete resume
+router.delete('/:id', protect, deleteResume);
 
 export default router;

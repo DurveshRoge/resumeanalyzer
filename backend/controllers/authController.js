@@ -121,21 +121,28 @@ export const loginUser = asyncHandler(async (req, res) => {
     res.status(401);
     throw new Error('Invalid email or password');
   }
-
-  res.json({
-    _id: user._id,
+  const token = generateToken(user._id);
+  const userData = {
+    id: user._id,
     name: user.name,
     email: user.email,
     role: user.role,
     ...(user.role === 'student' ? {
+      firstName: user.name.split(' ')[0],
+      lastName: user.name.split(' ')[1] || '',
       university: user.university,
       major: user.major,
       graduationYear: user.graduationYear
     } : user.role === 'company' ? {
+      companyName: user.name,
       industry: user.industry,
       companySize: user.companySize,
       contactPerson: user.contactPerson
-    } : {}),
-    token: generateToken(user._id),
+    } : {})
+  };
+
+  res.json({
+    token,
+    user: userData
   });
 });

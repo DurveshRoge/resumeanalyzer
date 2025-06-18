@@ -31,11 +31,12 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Simple CORS configuration
+// CORS configuration
 app.use(cors({
-  origin: '*',
+  origin: ['http://localhost:8080', 'http://localhost:5173', 'http://127.0.0.1:8080'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
 
 // Body parsing middleware
