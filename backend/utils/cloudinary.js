@@ -45,9 +45,16 @@ const storage = new CloudinaryStorage({
   cloudinary,
   params: {
     folder: 'resumes',
-    resource_type: 'raw', // for PDF/DOCX
+    resource_type: 'raw', // Essential for PDF/DOC files - keeps original format
     allowed_formats: ['pdf', 'doc', 'docx'],
-    transformation: [{ quality: 'auto' }],
+    public_id: (req, file) => {
+      // Create a unique filename with timestamp
+      const timestamp = Date.now();
+      const originalName = file.originalname.split('.')[0]; // Remove extension
+      return `resume-${timestamp}-${originalName}`;
+    },
+    // Don't apply transformations to raw files like PDFs
+    // transformation: [{ quality: 'auto' }], // Remove this for raw files
   },
 });
 

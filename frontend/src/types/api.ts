@@ -10,7 +10,8 @@ export interface LoginResponse {
 }
 
 export interface User {
-  id: string;
+  _id?: string; // MongoDB ObjectId, optional for compatibility
+  id?: string;  // Optional, for frontend compatibility
   name: string;
   email: string;
   role: 'student' | 'company';

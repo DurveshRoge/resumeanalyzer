@@ -46,8 +46,15 @@ export const uploadResume = asyncHandler(async (req, res) => {
       size: file.size,
       path: file.path,
       fieldName: file.fieldname,
-      cloudinaryUrl: file.path // Should contain the Cloudinary URL
+      cloudinaryUrl: file.path, // Should contain the Cloudinary URL
+      resourceType: 'raw', // Confirms we're using raw resource type
+      format: file.originalname.split('.').pop() // Extract file extension
     });
+
+    // Validate that the Cloudinary URL looks correct for raw files
+    if (!file.path.includes('upload/') || !file.path.includes('resumes/')) {
+      console.error("❌ Cloudinary URL format seems incorrect:", file.path);
+    }
 
     // Validate user exists
     if (!req.user || !req.user._id) {
@@ -57,11 +64,14 @@ export const uploadResume = asyncHandler(async (req, res) => {
     }
 
     console.log("💾 Attempting to save resume to database...");
-    
-    // Create resume record with Cloudinary URL
+      // Create resume record with Cloudinary URL and file metadata
     const resume = await Resume.create({
       user: req.user._id,
       resumeUrl: file.path, // This will be the Cloudinary URL
+      filename: file.originalname, // Original filename
+      mimeType: file.mimetype, // MIME type
+      fileSize: file.size, // File size
+      cloudinaryPublicId: file.filename, // Cloudinary public ID
       name: req.user.name || 'Unknown',
       email: req.user.email || 'unknown@email.com',
     });

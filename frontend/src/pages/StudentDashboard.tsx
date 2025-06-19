@@ -10,6 +10,7 @@ import { toast } from '@/hooks/use-toast';
 
 // Types
 interface Resume {
+  _id?: string;
   id: string;
   filename: string;
   url: string;
@@ -21,9 +22,15 @@ interface Resume {
 }
 
 interface Internship {
+  _id?: string;
   id: string;
   title: string;
-  company: string;
+  company: string | {
+    _id: string;
+    name?: string;
+    email?: string;
+    companyName?: string;
+  };
   description: string;
   location: string;
   type: string;
@@ -34,6 +41,7 @@ interface Internship {
 }
 
 interface Application {
+  _id?: string;
   id: string;
   internship: Internship;
   status: 'pending' | 'accepted' | 'rejected';
@@ -51,39 +59,74 @@ const StudentDashboard: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
+  // Helper function to safely get company name
+  const getCompanyName = (company: string | { _id: string; name?: string; email?: string; companyName?: string; }): string => {
+    if (typeof company === 'string') {
+      return company;
+    }
+    return company?.companyName || company?.name || 'Unknown Company';
+  };
+
   useEffect(() => {
-    if (user?.id) {
-      console.log('User ID changed, fetching new data');
+    const userId = user?._id || user?.id;
+    if (userId) {
+      console.log('User ID available, fetching new data. User ID:', userId);
       fetchData();
     }
-  }, [user?.id]);
+  }, [user]);
 
   const fetchData = async () => {
     try {
-      if (!user?.id) {
+      const userId = user?._id || user?.id;
+      if (!userId) {
         console.log('No user ID available');
         return;
       }
       
-      console.log('Fetching data for user:', user.id);
+      console.log('Fetching data for user ID:', userId);
+      console.log('Full user object:', user);
+      console.log('API Base URL:', api.defaults.baseURL);
+      console.log('Authorization header:', api.defaults.headers.common['Authorization']);
+      
+      // Test if we can reach the applications endpoint
+      try {
+        console.log('Testing applications endpoint...');
+        const testRes = await api.get(`/apply/user/${userId}`);
+        console.log('Applications endpoint test successful:', testRes.status);
+      } catch (testError) {
+        console.error('Applications endpoint test failed:', testError.response?.status, testError.response?.data);
+      }
+      
       const [resumesRes, applicationsRes, internshipsRes] = await Promise.all([
-        api.get(`/resume/user/${user.id}`),
-        api.get(`/apply/user/${user.id}`),
-        api.get('/internship')
+        api.get(`/resume/user/${userId}`).catch(error => {
+          console.error('Error fetching resumes:', error);
+          return { data: { data: [] } };
+        }),
+        api.get(`/apply/user/${userId}`).catch(error => {
+          console.error('Error fetching applications:', error);
+          console.error('Applications error details:', error.response?.data);
+          return { data: { data: [] } };
+        }),
+        api.get('/internship').catch(error => {
+          console.error('Error fetching internships:', error);
+          return { data: { data: [] } };
+        })
       ]);
 
       console.log('Raw resume response:', resumesRes.data);
+      console.log('Raw applications response:', applicationsRes.data);
       
       // Extract resume data from response
       const resumeData = resumesRes.data?.data || [];
       console.log('Processed resume data:', resumeData);
       
       // Extract application data from response
-      const applicationData = applicationsRes.data?.data || [];
+      const applicationData = applicationsRes.data?.data || applicationsRes.data || [];
       console.log('Processed application data:', applicationData);
+      console.log('Number of applications:', applicationData.length);
       
-      // Extract internship data from response
-      const internshipData = internshipsRes.data || [];
+      // Extract internship data from response, handling both data formats
+      const internshipData = internshipsRes.data?.data || internshipsRes.data || [];
       console.log('Processed internship data:', internshipData);
 
       setResumes(resumeData);
@@ -175,17 +218,26 @@ const StudentDashboard: React.FC = () => {
 
   const applyToInternship = async (internshipId: string, resumeId: string) => {
     try {
-      await api.post(`/apply/${internshipId}`, {
+      console.log('Applying to internship:', { internshipId, resumeId });
+      console.log('User ID:', user?.id || user?._id);
+      
+      const response = await api.post(`/apply/${internshipId}`, {
         resumeId
       });
+
+      console.log('Application response:', response.data);
 
       toast({
         title: "Success",
         description: "Application submitted successfully!"
       });
 
-      fetchData();
+      // Refetch data to update applications list
+      console.log('Refetching data after application submission...');
+      await fetchData();
+      console.log('Data refetch completed');
     } catch (error: any) {
+      console.error('Error applying to internship:', error);
       toast({
         title: "Error",
         description: error.response?.data?.message || "Failed to submit application",
@@ -323,7 +375,9 @@ const StudentDashboard: React.FC = () => {
             <Card>
     <CardHeader>
       <CardTitle>Upload Resume</CardTitle>
-      <CardDescription>Upload your resume to apply for internships</CardDescription>
+      <CardDescription>
+        Upload your resume to apply for internships. Files are securely stored in Cloudinary cloud storage.
+      </CardDescription>
     </CardHeader>
     <CardContent>
       <form onSubmit={(e) => e.preventDefault()} className="flex items-center space-x-2">
@@ -354,106 +408,216 @@ const StudentDashboard: React.FC = () => {
           )}
         </Button>
       </form>
+      <div className="mt-3 text-xs text-gray-500">
+        <p>• Supported formats: PDF, DOC, DOCX</p>
+        <p>• Maximum file size: 10MB</p>
+        <p>• Files are securely stored in Cloudinary cloud storage</p>
+        <p>• Your resume can be viewed and downloaded by potential employers</p>
+      </div>
     </CardContent>
   </Card>
 
             <div className="grid gap-4">
-              {resumes.map((resume: Resume) => (
-                <Card key={resume.id}>
-                  <CardHeader>
-                    <CardTitle className="text-lg">{resume.filename}</CardTitle>
-                    <CardDescription>
-                      Uploaded on {new Date(resume.uploadedAt).toLocaleDateString()}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => window.open(resume.url, '_blank')}
-                      >
-                        <FileText className="h-4 w-4 mr-2" />
-                        View Resume
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="text-red-500 hover:text-red-700"
-                        onClick={() => handleDeleteResume(resume.id)}
-                        disabled={deleting === resume.id}
-                      >
-                        {deleting === resume.id ? 'Deleting...' : 'Delete'}
-                      </Button>
-                    </div>
+              {Array.isArray(resumes) && resumes.length > 0 ? (
+                resumes.map((resume: Resume) => (
+                  <Card key={resume._id || resume.id}>
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <CardTitle className="text-lg">{resume.filename}</CardTitle>
+                          <CardDescription>
+                            Uploaded on {new Date(resume.uploadedAt).toLocaleDateString()} • 
+                            Stored in Cloudinary
+                          </CardDescription>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(resume.url, '_blank')}
+                          >
+                            <FileText className="h-4 w-4 mr-2" />
+                            View
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteResume(resume._id || resume.id)}
+                            disabled={deleting === (resume._id || resume.id)}
+                          >
+                            {deleting === (resume._id || resume.id) ? 'Deleting...' : 'Delete'}
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-sm text-gray-600 space-y-2">
+                        <p><strong>File ID:</strong> {resume._id || resume.id}</p>
+                        <p><strong>Storage:</strong> Cloudinary (Cloud Storage)</p>
+                        <p><strong>URL:</strong> <span className="text-xs break-all">{resume.url}</span></p>
+                        {resume.skills && resume.skills.length > 0 && (
+                          <div>
+                            <strong>Detected Skills:</strong>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {resume.skills.map((skill, index) => (
+                                <Badge key={index} variant="outline" className="text-xs">
+                                  {skill}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {resume.experience && resume.experience.length > 0 && (
+                          <div>
+                            <strong>Experience:</strong>
+                            <ul className="list-disc list-inside ml-2 mt-1">
+                              {resume.experience.slice(0, 3).map((exp, index) => (
+                                <li key={index} className="text-xs text-gray-500">{exp}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {resume.education && resume.education.length > 0 && (
+                          <div>
+                            <strong>Education:</strong>
+                            <ul className="list-disc list-inside ml-2 mt-1">
+                              {resume.education.slice(0, 2).map((edu, index) => (
+                                <li key={index} className="text-xs text-gray-500">{edu}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-8">
+                    <FileText className="h-12 w-12 text-gray-400 mb-4" />
+                    <p className="text-lg font-medium text-gray-600 text-center">No resumes uploaded yet</p>
+                    <p className="text-sm text-gray-500 text-center mt-1">Upload your first resume to start applying for internships</p>
                   </CardContent>
                 </Card>
-              ))}
+              )}
             </div>
           </TabsContent>
 
           <TabsContent value="internships" className="space-y-6">
             <div className="grid gap-6">
-              {internships.map((internship: Internship) => (
-                <Card key={internship.id}>
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-xl">{internship.title}</CardTitle>
-                        <CardDescription className="text-base mt-1">
-                          {internship.company} • {internship.location}
-                        </CardDescription>
+              {Array.isArray(internships) && internships.length > 0 ? (
+                internships.map((internship: Internship) => (
+                  <Card key={internship._id || internship.id}>
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle className="text-xl">{internship.title}</CardTitle>
+                          <CardDescription className="text-base mt-1">
+                            {getCompanyName(internship.company)} • {internship.location}
+                          </CardDescription>
+                        </div>
+                        <Badge variant="secondary">{internship.type}</Badge>
                       </div>
-                      <Badge variant="secondary">{internship.type}</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-gray-600 mb-4">{internship.description}</p>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {internship.requirements?.map((req: string, index: number) => (
-                        <Badge key={index} variant="outline">{req}</Badge>
-                      ))}
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <div className="text-sm text-gray-500">
-                        Duration: {internship.duration} • Stipend: ${internship.stipend}
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-gray-600 mb-4">{internship.description}</p>
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {internship.requirements?.map((req: string, index: number) => (
+                          <Badge key={index} variant="outline">{req}</Badge>
+                        ))}
                       </div>
-                      {resumes.length > 0 && (
-                        <Button onClick={() => applyToInternship(internship.id, resumes[0].id)}>
-                          Apply Now
-                        </Button>
-                      )}
-                    </div>
+                      <div className="flex justify-between items-center">
+                        <div className="text-sm text-gray-500">
+                          Duration: {internship.duration} • Stipend: ${internship.stipend}
+                        </div>
+                        {resumes.length > 0 && (
+                          <Button onClick={() => {
+                            const resumeId = resumes[0]._id || resumes[0].id;
+                            const internshipId = internship._id || internship.id;
+                            console.log('Button clicked - Resume ID:', resumeId, 'Internship ID:', internshipId);
+                            applyToInternship(internshipId, resumeId);
+                          }}>
+                            Apply Now
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-8">
+                    <Briefcase className="h-12 w-12 text-gray-400 mb-4" />
+                    <p className="text-lg font-medium text-gray-600 text-center">No internships available at the moment.</p>
+                    <p className="text-sm text-gray-500 text-center mt-1">Check back later for new opportunities!</p>
                   </CardContent>
                 </Card>
-              ))}
+              )}
             </div>
           </TabsContent>
 
           <TabsContent value="applications" className="space-y-6">
             <div className="grid gap-4">
-              {applications.map((application: Application) => (
-                <Card key={application.id}>
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle>{application.internship?.title}</CardTitle>
-                        <CardDescription>
-                          {application.internship?.company} • Applied on {new Date(application.appliedAt).toLocaleDateString()}
-                        </CardDescription>
+              {Array.isArray(applications) && applications.length > 0 ? (
+                applications.map((application: Application) => (
+                  <Card key={application._id || application.id}>
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle>{application.internship?.title || 'Unknown Internship'}</CardTitle>
+                          <CardDescription>
+                            {application.internship && getCompanyName(application.internship.company)} • Applied on {new Date(application.appliedAt).toLocaleDateString()}
+                          </CardDescription>
+                        </div>
+                        <Badge 
+                          variant={
+                            application.status === 'accepted' ? 'default' :
+                            application.status === 'rejected' ? 'destructive' : 'secondary'
+                          }
+                        >
+                          {application.status.charAt(0).toUpperCase() + application.status.slice(1)}
+                        </Badge>
                       </div>
-                      <Badge 
-                        variant={
-                          application.status === 'accepted' ? 'default' :
-                          application.status === 'rejected' ? 'destructive' : 'secondary'
-                        }
-                      >
-                        {application.status}
-                      </Badge>
-                    </div>
-                  </CardHeader>
+                    </CardHeader>
+                    <CardContent>
+                      {application.internship && (
+                        <div className="space-y-2">
+                          <div className="text-sm text-gray-600">
+                            <strong>Location:</strong> {application.internship.location}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            <strong>Type:</strong> {application.internship.type}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            <strong>Duration:</strong> {application.internship.duration}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            <strong>Stipend:</strong> ${application.internship.stipend}
+                          </div>
+                          {application.status === 'accepted' && (
+                            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
+                              <p className="text-sm text-green-800 font-medium">🎉 Congratulations! Your application has been accepted.</p>
+                            </div>
+                          )}
+                          {application.status === 'rejected' && (
+                            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
+                              <p className="text-sm text-red-800">Your application was not selected this time. Keep applying!</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-8">
+                    <FileText className="h-12 w-12 text-gray-400 mb-4" />
+                    <p className="text-lg font-medium text-gray-600 text-center">No applications submitted yet</p>
+                    <p className="text-sm text-gray-500 text-center mt-1">Apply to internships to see your application status here</p>
+                  </CardContent>
                 </Card>
-              ))}
+              )}
             </div>
           </TabsContent>
         </Tabs>

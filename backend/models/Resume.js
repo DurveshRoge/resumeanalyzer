@@ -6,6 +6,10 @@ const ResumeSchema = new mongoose.Schema(
     name: String,
     email: String,
     resumeUrl: String,
+    filename: String, // Original filename
+    mimeType: String, // File MIME type
+    fileSize: Number, // File size in bytes
+    cloudinaryPublicId: String, // Cloudinary public ID for management
     parsedSkills: [String], // for AI output
   },
   { timestamps: true }
